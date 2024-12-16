@@ -1,5 +1,7 @@
-import { Connection, Keypair, LAMPORTS_PER_SOL, TransactionSignature, PublicKey } from '@solana/web3.js';
-import { createMint, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { Keypair, Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { createMint } from '@solana/spl-token';
+import { Option, Creator, Collection, Uses } from '@metaplex-foundation/mpl-token-metadata';
+import { createMetadata, DataV2 } from '@metaplex-foundation/mpl-token-metadata';
 
 // Create a new connection to the devnet
 const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -10,21 +12,9 @@ const createKeypair = (): Keypair => {
 };
 
 // Function to airdrop SOL with a timeout
-const airdropSol = async (publicKey: PublicKey): Promise<TransactionSignature> => {
+const airdropSol = async (publicKey: PublicKey): Promise<void> => {
   const airdropSignature = await connection.requestAirdrop(publicKey, LAMPORTS_PER_SOL);
-  const timeout = 30000; // 30 seconds
-  const start = Date.now();
-
-  while (true) {
-    const status = await connection.getSignatureStatus(airdropSignature);
-    if (status.value?.confirmationStatus === 'finalized') {
-      return airdropSignature;
-    }
-    if (Date.now() - start > timeout) {
-      throw new Error('Airdrop confirmation timed out');
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait for 1 second before retrying
-  }
+  await connection.confirmTransaction(airdropSignature, 'finalized');
 };
 
 // Create a new SPL token and return it
@@ -46,5 +36,29 @@ export const createSPLToken = async () => {
   );
 
   console.log('Token created:', token.toBase58());
+
+  // Define metadata
+  const metadata: DataV2 = {
+    name: "My Token",
+    symbol: "MTK",
+    uri: "https://example.com/token-metadata.json", // URL to the token metadata JSON file
+    sellerFeeBasisPoints: 0, // Optional: Set to 0 if not used
+    creators: null as Option<Array<Creator>>, // Optional: List of creators
+    collection: null as Option<Collection>, // Optional: Collection info
+    uses: null as Option<Uses> // Optional: Usage info
+  };
+
+  // Create metadata for the token
+  await createMetadata(
+    connection,
+    payer,
+    mintAuthority.publicKey,
+    token,
+    mintAuthority.publicKey,
+    payer.publicKey,
+    metadata
+  );
+
+  console.log('Metadata created for token:', token.toBase58());
   return token;
 };
